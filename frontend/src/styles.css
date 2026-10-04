@@ -181,6 +181,8 @@ th { background: var(--canvas-deep); color: var(--navy); }
 .badge-raw { background: #e8eef5; color: #16324f; }
 .badge-dipping { background: #f3e6c4; color: #6b4f12; }
 .badge-cured { background: #d9ebe1; color: #2f6f4e; }
+.badge-active { background: #d9ebe1; color: #2f6f4e; }
+.badge-voided { background: #e5e0d5; color: #6b6f75; }
 
 .login-wrap {
   min-height: 100vh;

@@ -1,4 +1,6 @@
+from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Loft(models.Model):
@@ -58,3 +60,46 @@ class DipRun(models.Model):
 
     def __str__(self):
         return f"Dip@{self.roll_id} {self.started_at}"
+
+
+class RackLock(models.Model):
+    """铅封锁：新布卷入晾晒架前，须先在帆布间落一条未作废铅封号。
+
+    roll 为空表示该锁尚未绑卷（可用）；建卷成功时在同一事务里写入。
+    """
+
+    loft = models.ForeignKey(Loft, on_delete=models.CASCADE, related_name="rack_locks")
+    seal_number = models.CharField(max_length=60)
+    locked_at = models.DateTimeField(default=timezone.now)
+    locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="rack_locks",
+    )
+    voided_at = models.DateTimeField(null=True, blank=True)
+    roll = models.OneToOneField(
+        ClothRoll,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rack_lock",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-locked_at", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(seal_number=""),
+                name="racklock_seal_number_nonempty",
+            ),
+            models.UniqueConstraint(
+                fields=["loft", "seal_number"],
+                condition=models.Q(voided_at__isnull=True),
+                name="uniq_active_seal_per_loft",
+            ),
+        ]
+
+    def __str__(self):
+        state = "已作废" if self.voided_at else "未作废"
+        return f"{self.loft.name}/{self.seal_number} ({state})"

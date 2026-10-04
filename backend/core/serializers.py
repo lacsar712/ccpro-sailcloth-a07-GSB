@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import ClothRoll, DipRun, Loft
+from .models import ClothRoll, DipRun, Loft, RackLock
 from .rules import can_mark_roll_cured
 
 
@@ -23,6 +23,9 @@ class ClothRollSerializer(serializers.ModelSerializer):
     rollCode = serializers.CharField(source="roll_code")
     fabricWeightGsm = serializers.IntegerField(source="fabric_weight_gsm", required=False)
     loftName = serializers.CharField(source="loft.name", read_only=True)
+    sealNumber = serializers.CharField(
+        source="rack_lock.seal_number", read_only=True, default=None
+    )
 
     class Meta:
         model = ClothRoll
@@ -34,10 +37,11 @@ class ClothRollSerializer(serializers.ModelSerializer):
             "status",
             "fabricWeightGsm",
             "notes",
+            "sealNumber",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "loftName", "created_at", "updated_at")
+        read_only_fields = ("id", "loftName", "sealNumber", "created_at", "updated_at")
 
     def validate(self, attrs):
         loft = attrs.get("loft") or getattr(self.instance, "loft", None)
@@ -93,3 +97,58 @@ class DipRunSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = ("id", "rollCode", "loftName", "created_at")
+
+
+class RackLockSerializer(serializers.ModelSerializer):
+    loftId = serializers.PrimaryKeyRelatedField(source="loft", queryset=Loft.objects.all())
+    loftName = serializers.CharField(source="loft.name", read_only=True)
+    sealNumber = serializers.CharField(source="seal_number", max_length=60)
+    lockedAt = serializers.DateTimeField(source="locked_at", read_only=True)
+    lockedBy = serializers.CharField(source="locked_by.username", read_only=True)
+    voidedAt = serializers.DateTimeField(source="voided_at", read_only=True)
+    rollId = serializers.PrimaryKeyRelatedField(source="roll", read_only=True)
+    rollCode = serializers.CharField(
+        source="roll.roll_code", read_only=True, default=None
+    )
+
+    class Meta:
+        model = RackLock
+        fields = (
+            "id",
+            "loftId",
+            "loftName",
+            "sealNumber",
+            "lockedAt",
+            "lockedBy",
+            "voidedAt",
+            "rollId",
+            "rollCode",
+        )
+        read_only_fields = (
+            "id",
+            "loftName",
+            "lockedAt",
+            "lockedBy",
+            "voidedAt",
+            "rollId",
+            "rollCode",
+        )
+
+    def validate_sealNumber(self, value):
+        seal = value.strip()
+        if not seal:
+            raise serializers.ValidationError("铅封号不能为空")
+        return seal
+
+    def validate(self, attrs):
+        loft = attrs.get("loft")
+        seal = attrs.get("seal_number")
+        if loft and seal:
+            dup = RackLock.objects.filter(
+                loft=loft, seal_number=seal, voided_at__isnull=True
+            ).exists()
+            if dup:
+                raise serializers.ValidationError(
+                    {"sealNumber": f"帆布间「{loft.name}」已存在未作废的铅封号 {seal}，不能重复落锁"}
+                )
+        return attrs
