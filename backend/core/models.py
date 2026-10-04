@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -58,3 +59,54 @@ class DipRun(models.Model):
 
     def __str__(self):
         return f"Dip@{self.roll_id} {self.started_at}"
+
+
+class SealLock(models.Model):
+    """入架铅封：新布卷入架前须先在同帆布间落一把未作废铅封。"""
+
+    loft = models.ForeignKey(Loft, on_delete=models.CASCADE, related_name="seal_locks")
+    seal_number = models.CharField(max_length=60)
+    locked_at = models.DateTimeField(auto_now_add=True)
+    locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="seal_locks_locked",
+    )
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="seal_locks_voided",
+    )
+    roll = models.OneToOneField(
+        ClothRoll,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="seal_lock",
+    )
+
+    class Meta:
+        ordering = ["-locked_at", "-id"]
+        constraints = [
+            # 同帆布间未作废铅封号唯一；作废后该号可再发
+            models.UniqueConstraint(
+                fields=["loft", "seal_number"],
+                condition=models.Q(voided_at__isnull=True),
+                name="uniq_active_seal_number_per_loft",
+            ),
+        ]
+
+    @property
+    def is_active(self):
+        return self.voided_at is None
+
+    @property
+    def is_bound(self):
+        return self.roll_id is not None
+
+    def __str__(self):
+        state = "未作废" if self.is_active else "已作废"
+        return f"{self.loft.name}/{self.seal_number}（{state}）"

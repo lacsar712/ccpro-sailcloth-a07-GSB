@@ -1,11 +1,18 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import ClothRollViewSet, DipRunViewSet, LoftViewSet, dashboard_stats
+from .views import (
+    ClothRollViewSet,
+    DipRunViewSet,
+    LoftViewSet,
+    SealLockViewSet,
+    dashboard_stats,
+)
 
 router = DefaultRouter()
 router.register("lofts", LoftViewSet, basename="loft")
 router.register("rolls", ClothRollViewSet, basename="roll")
+router.register("seals", SealLockViewSet, basename="seal")
 router.register("dips", DipRunViewSet, basename="dip")
 
 urlpatterns = [
